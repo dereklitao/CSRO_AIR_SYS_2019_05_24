@@ -17,6 +17,7 @@
 #define MODBUS_FC_WRITE_AND_READ_REGISTERS 0x17
 
 #define MODBUS_BUFFER_LENGTH 512
+#define MODBUS_TIMEOUT 500
 
 typedef struct
 {
@@ -39,5 +40,8 @@ typedef struct
 
     uint8_t (*master_send_receive)(uint16_t timeout);
 } modbus_master;
+
+uint16_t crc16(uint8_t *buffer, uint16_t buffer_length);
+bool master_read_coils(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);
 
 #endif

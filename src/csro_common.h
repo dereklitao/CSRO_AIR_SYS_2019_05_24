@@ -11,4 +11,7 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 
+void csro_uart_init(void);
+void csro_gpio_init(void);
+
 #endif
