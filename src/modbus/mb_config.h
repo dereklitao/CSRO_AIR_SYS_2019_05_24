@@ -16,11 +16,12 @@
 #define MODBUS_FC_MASK_WRITE_REGISTER 0x16
 #define MODBUS_FC_WRITE_AND_READ_REGISTERS 0x17
 
-#define MODBUS_BUFFER_LENGTH 512
+#define MODBUS_BUFFER_LENGTH 1024
 #define MODBUS_TIMEOUT 500
 
 typedef struct
 {
+    uint8_t uart_num;
     uint16_t crc;
     uint8_t slave_id;
     uint8_t func_code;
@@ -34,11 +35,10 @@ typedef struct
     uint16_t rx_len;
     uint8_t tx_buf[MODBUS_BUFFER_LENGTH];
     uint16_t tx_len;
+    bool status;
 
-    uint16_t interval;
-    uint8_t status;
-
-    uint8_t (*master_send_receive)(uint16_t timeout);
+    bool (*master_send_receive)(uint16_t timeout);
+    SemaphoreHandle_t reply_sem;
 } modbus_master;
 
 uint16_t crc16(uint8_t *buffer, uint16_t buffer_length);

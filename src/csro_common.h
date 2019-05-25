@@ -14,4 +14,6 @@
 void csro_uart_init(void);
 void csro_gpio_init(void);
 
+void csro_debug(char *msg);
+
 #endif

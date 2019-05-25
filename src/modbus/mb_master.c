@@ -7,7 +7,7 @@ static bool master_validate_reply(modbus_master *master)
         return false;
     }
     uint16_t crc = crc16(master->rx_buf, master->rx_len - 2);
-    if (((crc & 0xFF) != master->rx_buf[master->rx_len - 2]) || ((crc >> 8) != master->rx_buf[master->rx_len - 1]))
+    if (((crc >> 8) != master->rx_buf[master->rx_len - 2]) || ((crc & 0xFF) != master->rx_buf[master->rx_len - 1]))
     {
         return false;
     }
@@ -32,8 +32,8 @@ bool master_read_coils(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t
     master->tx_buf[master->tx_len++] = master->read_qty >> 8;
     master->tx_buf[master->tx_len++] = master->read_qty & 0xFF;
     uint16_t crc = crc16(master->tx_buf, master->tx_len);
-    master->tx_buf[master->tx_len++] = crc & 0xFF;
     master->tx_buf[master->tx_len++] = crc >> 8;
+    master->tx_buf[master->tx_len++] = crc & 0xFF;
 
     if (master->master_send_receive(MODBUS_TIMEOUT))
     {
@@ -46,9 +46,7 @@ bool master_read_coils(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t
             for (int i = 0; i < master->read_qty; i++)
             {
                 result[i] = 0x01 & ((master->rx_buf[3 + i / 8]) >> (i % 8));
-                printf("%d|", result[i]);
             }
-            printf("\r\n");
             return true;
         }
     }

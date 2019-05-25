@@ -12,57 +12,121 @@
 #define RXD2_PIN (GPIO_NUM_19)
 #define RTS2_PIN (GPIO_NUM_18)
 
-modbus_master master_ap;
 portBASE_TYPE HPTaskAwoken = 0;
-SemaphoreHandle_t ap_reply_sem;
 
-uint32_t coil[30];
+modbus_master master_ap;
+modbus_master master_ac;
+
+SemaphoreHandle_t uart1_mutex;
+
+uint8_t ap_coil[30];
+uint8_t ac_coil[30];
+
+char message[200];
 
 static void uart_receive_one_byte(uart_port_t uart_num, uint8_t data)
 {
-    if (uart_num == UART_NUM_0)
+    if (uart_num == master_ap.uart_num)
     {
         master_ap.rx_buf[master_ap.rx_len++] = data;
+    }
+    else if (uart_num == master_ac.uart_num)
+    {
+        master_ac.rx_buf[master_ac.rx_len++] = data;
     }
 }
 
 static void uart_receive_complete(uart_port_t uart_num)
 {
-    if (uart_num == UART_NUM_0)
+    if (uart_num == master_ap.uart_num)
     {
-        xSemaphoreGiveFromISR(ap_reply_sem, &HPTaskAwoken);
+        xSemaphoreGiveFromISR(master_ap.reply_sem, &HPTaskAwoken);
+        uart_flush(master_ap.uart_num);
+    }
+    else if (uart_num == master_ac.uart_num)
+    {
+        xSemaphoreGiveFromISR(master_ac.reply_sem, &HPTaskAwoken);
+        uart_flush(master_ac.uart_num);
     }
 }
 
-static void modbus_task(void *param)
+static void modbus_ap_task(void *param)
 {
     while (true)
     {
-        master_read_coils(&master_ap, 1, 20, coil);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        master_read_coils(&master_ap, 1, 20, ap_coil);
+
+        xSemaphoreTake(uart1_mutex, portMAX_DELAY);
+        csro_debug("ap_coil = ");
+        for (size_t i = 0; i < 20; i++)
+        {
+            sprintf(message, "%d|", ap_coil[i]);
+            csro_debug(message);
+        }
+        csro_debug("\r\n");
+        xSemaphoreGive(uart1_mutex);
+
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
 
-static bool master_ap_uart0_send_receive(uint16_t timeout)
+static void modbus_ac_task(void *param)
 {
-    xSemaphoreTake(ap_reply_sem, 0);
-    uart_write_bytes(UART_NUM_0, (const char *)master_ap.tx_buf, master_ap.tx_len);
-    if (xSemaphoreTake(ap_reply_sem, timeout) == pdTRUE)
+    while (true)
+    {
+        master_read_coils(&master_ac, 1, 20, ac_coil);
+
+        xSemaphoreTake(uart1_mutex, portMAX_DELAY);
+        csro_debug("ac_coil = ");
+        for (size_t i = 0; i < 20; i++)
+        {
+            sprintf(message, "%d|", ac_coil[i]);
+            csro_debug(message);
+        }
+        csro_debug("\r\n");
+        xSemaphoreGive(uart1_mutex);
+
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
+
+static bool master_ap_send_receive(uint16_t timeout)
+{
+    master_ap.status = false;
+    master_ap.rx_len = 0;
+    uart_write_bytes(master_ap.uart_num, (const char *)master_ap.tx_buf, master_ap.tx_len);
+    if (xSemaphoreTake(master_ap.reply_sem, timeout / portTICK_PERIOD_MS) == pdTRUE)
     {
         master_ap.status = true;
-    }
-    else
-    {
-        master_ap.status = false;
     }
     return master_ap.status;
 }
 
+static bool master_ac_send_receive(uint16_t timeout)
+{
+    master_ac.status = false;
+    master_ac.rx_len = 0;
+    uart_write_bytes(master_ac.uart_num, (const char *)master_ac.tx_buf, master_ac.tx_len);
+    if (xSemaphoreTake(master_ac.reply_sem, timeout / portTICK_PERIOD_MS) == pdTRUE)
+    {
+        master_ac.status = true;
+    }
+    return master_ac.status;
+}
+
 static void modbus_init(void)
 {
+    uart1_mutex = xSemaphoreCreateMutex();
+
+    master_ap.uart_num = UART_NUM_0;
     master_ap.slave_id = 1;
-    master_ap.master_send_receive = master_ap_uart0_send_receive;
-    ap_reply_sem = xSemaphoreCreateBinary();
+    master_ap.master_send_receive = master_ap_send_receive;
+    master_ap.reply_sem = xSemaphoreCreateBinary();
+
+    master_ac.uart_num = UART_NUM_2;
+    master_ac.slave_id = 2;
+    master_ac.master_send_receive = master_ac_send_receive;
+    master_ac.reply_sem = xSemaphoreCreateBinary();
 }
 
 void csro_uart_init(void)
@@ -95,5 +159,11 @@ void csro_uart_init(void)
 
     modbus_init();
 
-    xTaskCreate(modbus_task, "modbus_task", 2048, NULL, configMAX_PRIORITIES - 4, NULL);
+    xTaskCreate(modbus_ap_task, "modbus_ap_task", 2048, NULL, configMAX_PRIORITIES - 4, NULL);
+    xTaskCreate(modbus_ac_task, "modbus_ac_task", 2048, NULL, configMAX_PRIORITIES - 4, NULL);
+}
+
+void csro_debug(char *msg)
+{
+    uart_write_bytes(UART_NUM_1, (const char *)msg, strlen(msg));
 }

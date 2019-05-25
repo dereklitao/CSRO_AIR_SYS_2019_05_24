@@ -10,9 +10,11 @@
 
 static void csro_gpio_task(void *param)
 {
+    static bool flag = false;
     while (true)
     {
-        gpio_set_level(LED_PIN, !gpio_get_level(LED_PIN));
+        gpio_set_level(LED_PIN, flag);
+        flag = !flag;
         vTaskDelay(500 / portTICK_PERIOD_MS);
     }
 }
