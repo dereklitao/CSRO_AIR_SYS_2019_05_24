@@ -19,10 +19,21 @@
 #define MODBUS_BUFFER_LENGTH 1024
 #define MODBUS_TIMEOUT 500
 
+#define MODBUS_COIL_MAX 255
+#define MODBUS_HOLDING_MAX 255
+
+typedef struct
+{
+    bool coils[MODBUS_COIL_MAX];
+    bool coil_flags[MODBUS_COIL_MAX];
+
+    uint16_t holdings[MODBUS_HOLDING_MAX];
+    bool holding_flags[MODBUS_HOLDING_MAX];
+} device_regs;
+
 typedef struct
 {
     uint8_t uart_num;
-    uint16_t crc;
     uint8_t slave_id;
     uint8_t func_code;
 
@@ -41,7 +52,34 @@ typedef struct
     SemaphoreHandle_t reply_sem;
 } modbus_master;
 
+typedef struct
+{
+    uint8_t uart_num;
+    uint8_t slave_id;
+    uint8_t func_code;
+
+    uint16_t read_addr;
+    uint16_t read_qty;
+    uint16_t write_addr;
+    uint16_t write_qty;
+
+    uint8_t rx_buf[MODBUS_BUFFER_LENGTH];
+    uint16_t rx_len;
+    uint8_t tx_buf[MODBUS_BUFFER_LENGTH];
+    uint16_t tx_len;
+} modbus_slave;
+
 uint16_t crc16(uint8_t *buffer, uint16_t buffer_length);
+
+bool master_read_discs(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);
 bool master_read_coils(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);
+
+bool master_read_input_regs(modbus_master *master, uint8_t addr, uint8_t qty, uint16_t *result);
+bool master_read_holding_regs(modbus_master *master, uint8_t addr, uint8_t qty, uint16_t *result);
+
+bool master_write_single_coil(modbus_master *master, uint8_t addr, bool value);
+bool master_write_single_holding_reg(modbus_master *master, uint8_t addr, uint16_t value);
+
+void slave_handle_command(modbus_slave *slave);
 
 #endif
