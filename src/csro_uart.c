@@ -16,6 +16,8 @@ portBASE_TYPE HPTaskAwoken = 0;
 
 modbus_master master_ap;
 modbus_master master_ac;
+modbus_slave slave_hmi;
+device_regs airsys_regs;
 
 SemaphoreHandle_t uart1_mutex;
 
@@ -34,6 +36,10 @@ static void uart_receive_one_byte(uart_port_t uart_num, uint8_t data)
     {
         master_ac.rx_buf[master_ac.rx_len++] = data;
     }
+    else if (uart_num == slave_hmi.uart_num)
+    {
+        slave_hmi.rx_buf[slave_hmi.rx_len++] = data;
+    }
 }
 
 static void uart_receive_complete(uart_port_t uart_num)
@@ -47,6 +53,11 @@ static void uart_receive_complete(uart_port_t uart_num)
     {
         xSemaphoreGiveFromISR(master_ac.reply_sem, &HPTaskAwoken);
         uart_flush(master_ac.uart_num);
+    }
+    else if (uart_num == slave_hmi.uart_num)
+    {
+        uart_flush(slave_hmi.uart_num);
+        slave_handle_command(&slave_hmi);
     }
 }
 

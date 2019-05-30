@@ -69,6 +69,8 @@ typedef struct
     uint16_t tx_len;
 } modbus_slave;
 
+extern device_regs airsys_regs;
+
 uint16_t crc16(uint8_t *buffer, uint16_t buffer_length);
 
 bool master_read_discs(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);

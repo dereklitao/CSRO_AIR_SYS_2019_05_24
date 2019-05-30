@@ -1,7 +1,5 @@
 #include "mb_config.h"
 
-device_regs airsys_regs;
-
 static void handle_read_coils(modbus_slave *slave)
 {
     slave->read_addr = slave->rx_buf[2] * 256 + slave->rx_buf[3];
