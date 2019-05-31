@@ -67,6 +67,8 @@ typedef struct
     uint16_t rx_len;
     uint8_t tx_buf[MODBUS_BUFFER_LENGTH];
     uint16_t tx_len;
+
+    device_regs *regs;
     SemaphoreHandle_t command_sem;
 } modbus_slave;
 
@@ -84,7 +86,7 @@ bool master_read_discs(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t
 bool master_read_coils(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);
 bool master_read_input_regs(modbus_master *master, uint8_t addr, uint8_t qty, uint16_t *result);
 bool master_read_holding_regs(modbus_master *master, uint8_t addr, uint8_t qty, uint16_t *result);
-bool master_write_single_coil(modbus_master *master, uint8_t addr, bool value);
+bool master_write_single_coil(modbus_master *master, uint8_t addr, uint8_t value);
 bool master_write_single_holding_reg(modbus_master *master, uint8_t addr, uint16_t value);
 void slave_handle_command(modbus_slave *slave);
 

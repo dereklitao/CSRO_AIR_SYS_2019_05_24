@@ -18,7 +18,7 @@ void modbus_ac_task(void *param)
 {
     while (true)
     {
-        master_read_coils(&master_ac, 1, 20, airsys_regs.coils[100]);
+        master_read_coils(&master_ac, 1, 20, &airsys_regs.coils[100]);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
@@ -27,7 +27,10 @@ void modbus_hmi_task(void *param)
 {
     while (true)
     {
-        master_read_coils(&master_ac, 1, 20, airsys_regs.coils[100]);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        if (xSemaphoreTake(slave_hmi.command_sem, portMAX_DELAY) == pdTRUE)
+        {
+            slave_handle_command(&slave_hmi);
+            slave_hmi.rx_len = 0;
+        }
     }
 }

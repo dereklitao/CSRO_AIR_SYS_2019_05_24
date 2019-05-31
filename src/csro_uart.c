@@ -107,13 +107,20 @@ void csro_uart_init(void)
     master_ap.reply_sem = xSemaphoreCreateBinary();
 
     master_ac.uart_num = UART_NUM_1;
-    master_ac.slave_id = 2;
+    master_ac.slave_id = 1;
     master_ac.master_send_receive = master_ac_send_receive;
     master_ac.reply_sem = xSemaphoreCreateBinary();
 
     slave_hmi.uart_num = UART_NUM_2;
     slave_hmi.slave_id = 1;
     slave_hmi.command_sem = xSemaphoreCreateBinary();
+    slave_hmi.regs = &airsys_regs;
+
+    for (size_t i = 0; i < 255; i++)
+    {
+        slave_hmi.regs->coils[i] = i % 2;
+        slave_hmi.regs->holdings[i] = i;
+    }
 
     xTaskCreate(modbus_ap_task, "modbus_ap_task", 2048, NULL, configMAX_PRIORITIES - 6, NULL);
     xTaskCreate(modbus_ac_task, "modbus_ac_task", 2048, NULL, configMAX_PRIORITIES - 7, NULL);

@@ -23,7 +23,7 @@ static void handle_read_coils(modbus_slave *slave)
             }
             if (i < slave->read_qty)
             {
-                data = (airsys_regs.coils[slave->read_addr + i] == true) ? (data >> 1 | 0x80) : (data >> 1 & 0x7F);
+                data = (slave->regs->coils[slave->read_addr + i] == true) ? (data >> 1 | 0x80) : (data >> 1 & 0x7F);
             }
             else
             {
@@ -52,8 +52,8 @@ static void handle_read_holding_regs(modbus_slave *slave)
         slave->tx_buf[slave->tx_len++] = slave->read_qty * 2;
         for (size_t i = 0; i < slave->read_qty; i++)
         {
-            slave->tx_buf[slave->tx_len++] = airsys_regs.holdings[i + slave->read_addr] >> 8;
-            slave->tx_buf[slave->tx_len++] = airsys_regs.holdings[i + slave->read_addr] & 0xFF;
+            slave->tx_buf[slave->tx_len++] = slave->regs->holdings[i + slave->read_addr] >> 8;
+            slave->tx_buf[slave->tx_len++] = slave->regs->holdings[i + slave->read_addr] & 0xFF;
         }
     }
 }
@@ -73,16 +73,16 @@ static void handle_write_single_coil(modbus_slave *slave)
         slave->tx_buf[slave->tx_len++] = slave->write_addr & 0xFF;
         if (slave->rx_buf[4] == 0xFF && slave->rx_buf[5] == 0x00)
         {
-            airsys_regs.coils[slave->write_addr] = true;
+            slave->regs->coils[slave->write_addr] = true;
             slave->tx_buf[slave->tx_len++] = 0xFF;
         }
         else
         {
-            airsys_regs.coils[slave->write_addr] = false;
+            slave->regs->coils[slave->write_addr] = false;
             slave->tx_buf[slave->tx_len++] = 0x00;
         }
         slave->tx_buf[slave->tx_len++] = 0x00;
-        airsys_regs.coil_flags[slave->write_addr] = true;
+        slave->regs->coil_flags[slave->write_addr] = true;
     }
 }
 
@@ -100,8 +100,8 @@ static void handle_write_multi_coils(modbus_slave *slave)
         slave->tx_buf[slave->tx_len++] = slave->rx_buf[1];
         for (size_t i = 0; i < slave->write_qty; i++)
         {
-            airsys_regs.coils[slave->write_addr + i] = (slave->rx_buf[7 + i / 8] >> (i % 8)) & 0x01;
-            airsys_regs.coil_flags[slave->write_addr + i] = true;
+            slave->regs->coils[slave->write_addr + i] = (slave->rx_buf[7 + i / 8] >> (i % 8)) & 0x01;
+            slave->regs->coil_flags[slave->write_addr + i] = true;
         }
         slave->tx_buf[slave->tx_len++] = slave->write_addr >> 8;
         slave->tx_buf[slave->tx_len++] = slave->write_addr & 0xFF;
@@ -120,13 +120,13 @@ static void handle_write_single_holding_reg(modbus_slave *slave)
     }
     else
     {
-        airsys_regs.holdings[slave->write_addr] = slave->rx_buf[4] * 256 + slave->rx_buf[5];
+        slave->regs->holdings[slave->write_addr] = slave->rx_buf[4] * 256 + slave->rx_buf[5];
         slave->tx_buf[slave->tx_len++] = slave->rx_buf[1];
         slave->tx_buf[slave->tx_len++] = slave->write_addr >> 8;
         slave->tx_buf[slave->tx_len++] = slave->write_addr & 0xFF;
-        slave->tx_buf[slave->tx_len++] = airsys_regs.holdings[slave->write_addr] >> 8;
-        slave->tx_buf[slave->tx_len++] = airsys_regs.holdings[slave->write_addr] & 0xFF;
-        airsys_regs.holding_flags[slave->write_addr] = true;
+        slave->tx_buf[slave->tx_len++] = slave->regs->holdings[slave->write_addr] >> 8;
+        slave->tx_buf[slave->tx_len++] = slave->regs->holdings[slave->write_addr] & 0xFF;
+        slave->regs->holding_flags[slave->write_addr] = true;
     }
 }
 
@@ -143,8 +143,8 @@ static void handle_write_multi_holding_regs(modbus_slave *slave)
     {
         for (size_t i = 0; i < slave->write_qty; i++)
         {
-            airsys_regs.holdings[slave->write_addr + i] = slave->rx_buf[7 + 2 * i] * 256 + slave->rx_buf[8 + 2 * i];
-            airsys_regs.holding_flags[slave->write_addr + i] = true;
+            slave->regs->holdings[slave->write_addr + i] = slave->rx_buf[7 + 2 * i] * 256 + slave->rx_buf[8 + 2 * i];
+            slave->regs->holding_flags[slave->write_addr + i] = true;
         }
         slave->tx_buf[slave->tx_len++] = slave->rx_buf[1];
         slave->tx_buf[slave->tx_len++] = slave->write_addr >> 8;
@@ -167,18 +167,13 @@ void slave_handle_command(modbus_slave *slave)
         return;
     }
     uint16_t crc = crc16(slave->rx_buf, slave->rx_len - 2);
-    if (((crc >> 8) != slave->rx_buf[slave->rx_len - 2]) || ((crc & 0xFF) != slave->rx_buf[slave->rx_len - 1]))
-    {
-        return;
-    }
-    if (slave->rx_buf[0] != slave->slave_id)
+    if (((crc >> 8) != slave->rx_buf[slave->rx_len - 2]) || ((crc & 0xFF) != slave->rx_buf[slave->rx_len - 1]) || (slave->rx_buf[0] != slave->slave_id))
     {
         return;
     }
 
     slave->tx_len = 0;
     slave->tx_buf[slave->tx_len++] = slave->slave_id;
-
     if (slave->rx_buf[1] == MODBUS_FC_READ_COILS)
     {
         handle_read_coils(slave);
