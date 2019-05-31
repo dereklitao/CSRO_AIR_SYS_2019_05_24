@@ -12,20 +12,6 @@
 #define RXD2_PIN (GPIO_NUM_19)
 #define RTS2_PIN (GPIO_NUM_18)
 
-portBASE_TYPE HPTaskAwoken = 0;
-
-modbus_master master_ap;
-modbus_master master_ac;
-modbus_slave slave_hmi;
-device_regs airsys_regs;
-
-SemaphoreHandle_t uart1_mutex;
-
-uint8_t ap_coil[30];
-uint8_t ac_coil[30];
-
-char message[200];
-
 static void uart_receive_one_byte(uart_port_t uart_num, uint8_t data)
 {
     if (uart_num == master_ap.uart_num)
@@ -44,60 +30,22 @@ static void uart_receive_one_byte(uart_port_t uart_num, uint8_t data)
 
 static void uart_receive_complete(uart_port_t uart_num)
 {
+    static portBASE_TYPE HPTaskAwoken = 0;
+
     if (uart_num == master_ap.uart_num)
     {
-        xSemaphoreGiveFromISR(master_ap.reply_sem, &HPTaskAwoken);
         uart_flush(master_ap.uart_num);
+        xSemaphoreGiveFromISR(master_ap.reply_sem, &HPTaskAwoken);
     }
     else if (uart_num == master_ac.uart_num)
     {
-        xSemaphoreGiveFromISR(master_ac.reply_sem, &HPTaskAwoken);
         uart_flush(master_ac.uart_num);
+        xSemaphoreGiveFromISR(master_ac.reply_sem, &HPTaskAwoken);
     }
     else if (uart_num == slave_hmi.uart_num)
     {
         uart_flush(slave_hmi.uart_num);
-        slave_handle_command(&slave_hmi);
-    }
-}
-
-static void modbus_ap_task(void *param)
-{
-    while (true)
-    {
-        master_read_coils(&master_ap, 1, 20, ap_coil);
-
-        xSemaphoreTake(uart1_mutex, portMAX_DELAY);
-        csro_debug("ap_coil = ");
-        for (size_t i = 0; i < 20; i++)
-        {
-            sprintf(message, "%d|", ap_coil[i]);
-            csro_debug(message);
-        }
-        csro_debug("\r\n");
-        xSemaphoreGive(uart1_mutex);
-
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-}
-
-static void modbus_ac_task(void *param)
-{
-    while (true)
-    {
-        master_read_coils(&master_ac, 1, 20, ac_coil);
-
-        xSemaphoreTake(uart1_mutex, portMAX_DELAY);
-        csro_debug("ac_coil = ");
-        for (size_t i = 0; i < 20; i++)
-        {
-            sprintf(message, "%d|", ac_coil[i]);
-            csro_debug(message);
-        }
-        csro_debug("\r\n");
-        xSemaphoreGive(uart1_mutex);
-
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        xSemaphoreGiveFromISR(slave_hmi.command_sem, &HPTaskAwoken);
     }
 }
 
@@ -123,21 +71,6 @@ static bool master_ac_send_receive(uint16_t timeout)
         master_ac.status = true;
     }
     return master_ac.status;
-}
-
-static void modbus_init(void)
-{
-    uart1_mutex = xSemaphoreCreateMutex();
-
-    master_ap.uart_num = UART_NUM_0;
-    master_ap.slave_id = 1;
-    master_ap.master_send_receive = master_ap_send_receive;
-    master_ap.reply_sem = xSemaphoreCreateBinary();
-
-    master_ac.uart_num = UART_NUM_2;
-    master_ac.slave_id = 2;
-    master_ac.master_send_receive = master_ac_send_receive;
-    master_ac.reply_sem = xSemaphoreCreateBinary();
 }
 
 void csro_uart_init(void)
@@ -168,13 +101,21 @@ void csro_uart_init(void)
     uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
     uart_set_mode(UART_NUM_2, UART_MODE_RS485_HALF_DUPLEX);
 
-    modbus_init();
+    master_ap.uart_num = UART_NUM_0;
+    master_ap.slave_id = 1;
+    master_ap.master_send_receive = master_ap_send_receive;
+    master_ap.reply_sem = xSemaphoreCreateBinary();
 
-    xTaskCreate(modbus_ap_task, "modbus_ap_task", 2048, NULL, configMAX_PRIORITIES - 4, NULL);
-    xTaskCreate(modbus_ac_task, "modbus_ac_task", 2048, NULL, configMAX_PRIORITIES - 4, NULL);
-}
+    master_ac.uart_num = UART_NUM_1;
+    master_ac.slave_id = 2;
+    master_ac.master_send_receive = master_ac_send_receive;
+    master_ac.reply_sem = xSemaphoreCreateBinary();
 
-void csro_debug(char *msg)
-{
-    uart_write_bytes(UART_NUM_1, (const char *)msg, strlen(msg));
+    slave_hmi.uart_num = UART_NUM_2;
+    slave_hmi.slave_id = 1;
+    slave_hmi.command_sem = xSemaphoreCreateBinary();
+
+    xTaskCreate(modbus_ap_task, "modbus_ap_task", 2048, NULL, configMAX_PRIORITIES - 6, NULL);
+    xTaskCreate(modbus_ac_task, "modbus_ac_task", 2048, NULL, configMAX_PRIORITIES - 7, NULL);
+    xTaskCreate(modbus_hmi_task, "modbus_hmi_task", 2048, NULL, configMAX_PRIORITIES - 8, NULL);
 }

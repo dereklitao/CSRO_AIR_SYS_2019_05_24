@@ -24,7 +24,7 @@
 
 typedef struct
 {
-    bool coils[MODBUS_COIL_MAX];
+    uint8_t coils[MODBUS_COIL_MAX];
     bool coil_flags[MODBUS_COIL_MAX];
 
     uint16_t holdings[MODBUS_HOLDING_MAX];
@@ -67,21 +67,25 @@ typedef struct
     uint16_t rx_len;
     uint8_t tx_buf[MODBUS_BUFFER_LENGTH];
     uint16_t tx_len;
+    SemaphoreHandle_t command_sem;
 } modbus_slave;
 
+extern modbus_master master_ap;
+extern modbus_master master_ac;
+extern modbus_slave slave_hmi;
 extern device_regs airsys_regs;
 
-uint16_t crc16(uint8_t *buffer, uint16_t buffer_length);
+void modbus_ap_task(void *param);
+void modbus_ac_task(void *param);
+void modbus_hmi_task(void *param);
 
+uint16_t crc16(uint8_t *buffer, uint16_t buffer_length);
 bool master_read_discs(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);
 bool master_read_coils(modbus_master *master, uint8_t addr, uint8_t qty, uint8_t *result);
-
 bool master_read_input_regs(modbus_master *master, uint8_t addr, uint8_t qty, uint16_t *result);
 bool master_read_holding_regs(modbus_master *master, uint8_t addr, uint8_t qty, uint16_t *result);
-
 bool master_write_single_coil(modbus_master *master, uint8_t addr, bool value);
 bool master_write_single_holding_reg(modbus_master *master, uint8_t addr, uint16_t value);
-
 void slave_handle_command(modbus_slave *slave);
 
 #endif
